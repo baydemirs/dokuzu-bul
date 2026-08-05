@@ -1,3 +1,4 @@
+import 'package:dokuzu_bul/features/game/domain/game_card_model.dart';
 import 'package:dokuzu_bul/features/game/domain/game_state.dart';
 import 'package:dokuzu_bul/features/game/presentation/widgets/game_board_widget.dart';
 import 'package:dokuzu_bul/features/game/presentation/widgets/game_header_widget.dart';
@@ -18,6 +19,33 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     gameState = createInitialGameState();
+  }
+
+  void _handleCardSelected(GameCardModel selectedCard) {
+    if (selectedCard.isTarget) {
+      setState(() {
+        gameState = gameState.copyWith(
+          score: gameState.score + 100,
+          correctAnswers: gameState.correctAnswers + 1,
+        );
+      });
+
+      debugPrint(
+        'Doğru seçim: ${selectedCard.number} - Skor: ${gameState.score}',
+      );
+
+      return;
+    }
+
+    setState(() {
+      gameState = gameState.copyWith(
+        lives: gameState.lives > 0 ? gameState.lives - 1 : 0,
+      );
+    });
+
+    debugPrint(
+      'Yanlış seçim: ${selectedCard.number} - Kalan can: ${gameState.lives}',
+    );
   }
 
   @override
@@ -53,7 +81,12 @@ class _GameScreenState extends State<GameScreen> {
               ),
               const SizedBox(height: 32),
               Expanded(
-                child: Center(child: GameBoardWidget(cards: gameState.cards)),
+                child: Center(
+                  child: GameBoardWidget(
+                    cards: gameState.cards,
+                    onCardSelected: _handleCardSelected,
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               GameTimerWidget(

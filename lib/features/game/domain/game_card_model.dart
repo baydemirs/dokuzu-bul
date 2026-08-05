@@ -17,6 +17,14 @@ class GameCardModel {
 
   int get column => slot % 3;
 
+  GameCardModel open() {
+    return copyWith(isFaceVisible: true);
+  }
+
+  GameCardModel close() {
+    return copyWith(isFaceVisible: false);
+  }
+
   GameCardModel copyWith({
     int? id,
     int? number,

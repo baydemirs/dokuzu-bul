@@ -3,9 +3,14 @@ import 'package:dokuzu_bul/features/game/presentation/widgets/game_card_widget.d
 import 'package:flutter/material.dart';
 
 class GameBoardWidget extends StatelessWidget {
-  const GameBoardWidget({super.key, required this.cards});
+  const GameBoardWidget({
+    super.key,
+    required this.cards,
+    this.onCardSelected,
+  });
 
   final List<GameCardModel> cards;
+  final ValueChanged<GameCardModel>? onCardSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +32,16 @@ class GameBoardWidget extends StatelessWidget {
         itemBuilder: (context, index) {
           final card = sortedCards[index];
 
-          return GameCardWidget(key: ValueKey(card.id), number: card.number);
+          return GameCardWidget(
+            key: ValueKey(card.id),
+            number: card.number,
+            isFaceVisible: card.isFaceVisible,
+            onTap: onCardSelected == null
+                ? null
+                : () {
+              onCardSelected!(card);
+            },
+          );
         },
       ),
     );
