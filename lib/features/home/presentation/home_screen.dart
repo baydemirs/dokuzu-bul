@@ -1,3 +1,4 @@
+import 'package:dokuzu_bul/features/game/presentation/game_screen.dart';
 import 'package:flutter/material.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -25,7 +26,14 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 48),
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const GameScreen(),
+                      ),
+                    );
+                  },
                   child: const Text('Yeni Oyun'),
                 ),
                 const SizedBox(height: 16),
