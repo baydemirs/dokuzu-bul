@@ -1,10 +1,24 @@
-import 'package:dokuzu_bul/features/game/presentation/widgets/game_timer_widget.dart';
-import 'package:dokuzu_bul/features/game/presentation/widgets/game_header_widget.dart';
+import 'package:dokuzu_bul/features/game/domain/game_state.dart';
 import 'package:dokuzu_bul/features/game/presentation/widgets/game_board_widget.dart';
+import 'package:dokuzu_bul/features/game/presentation/widgets/game_header_widget.dart';
+import 'package:dokuzu_bul/features/game/presentation/widgets/game_timer_widget.dart';
 import 'package:flutter/material.dart';
 
-class GameScreen extends StatelessWidget {
+class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
+
+  @override
+  State<GameScreen> createState() => _GameScreenState();
+}
+
+class _GameScreenState extends State<GameScreen> {
+  late GameState gameState;
+
+  @override
+  void initState() {
+    super.initState();
+    gameState = createInitialGameState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,13 +28,20 @@ class GameScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              const GameHeaderWidget(),
+              GameHeaderWidget(
+                lives: gameState.lives,
+                level: 'Kolay',
+                score: gameState.score,
+              ),
               const SizedBox(height: 12),
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Tur 1 / 5',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  'Tur ${gameState.currentRound} / 5',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(height: 28),
@@ -31,9 +52,14 @@ class GameScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              const Expanded(child: Center(child: GameBoardWidget())),
+              Expanded(
+                child: Center(child: GameBoardWidget(cards: gameState.cards)),
+              ),
               const SizedBox(height: 24),
-              const GameTimerWidget(),
+              GameTimerWidget(
+                progress: gameState.remainingTime,
+                remainingSeconds: 6,
+              ),
             ],
           ),
         ),

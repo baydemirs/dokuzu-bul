@@ -13,6 +13,10 @@ class GameCardModel {
 
   bool get isTarget => number == 9;
 
+  int get row => slot ~/ 3;
+
+  int get column => slot % 3;
+
   GameCardModel copyWith({
     int? id,
     int? number,
