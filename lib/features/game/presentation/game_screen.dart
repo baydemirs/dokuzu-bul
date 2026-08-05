@@ -48,8 +48,47 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+  void _swapFirstTwoCards() {
+    final firstCard = gameState.cards[0];
+    final secondCard = gameState.cards[1];
+
+    final updatedCards = gameState.cards.map((card) {
+      if (card.id == firstCard.id) {
+        return card.copyWith(slot: secondCard.slot);
+      }
+
+      if (card.id == secondCard.id) {
+        return card.copyWith(slot: firstCard.slot);
+      }
+
+      return card;
+    }).toList();
+
+    setState(() {
+      gameState = gameState.copyWith(cards: updatedCards);
+    });
+  }
+
+  void _toggleCardFaces() {
+    final updatedCards = gameState.cards.map((card) {
+      if (card.isFaceVisible) {
+        return card.close();
+      }
+
+      return card.open();
+    }).toList();
+
+    setState(() {
+      gameState = gameState.copyWith(cards: updatedCards);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool cardsAreVisible = gameState.cards.every(
+      (card) => card.isFaceVisible,
+    );
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -79,7 +118,7 @@ class _GameScreenState extends State<GameScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               Expanded(
                 child: Center(
                   child: GameBoardWidget(
@@ -88,7 +127,27 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _swapFirstTwoCards,
+                      child: const Text('Kartları Taşı'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _toggleCardFaces,
+                      child: Text(
+                        cardsAreVisible ? 'Kartları Kapat' : 'Kartları Aç',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
               GameTimerWidget(
                 progress: gameState.remainingTime,
                 remainingSeconds: 6,

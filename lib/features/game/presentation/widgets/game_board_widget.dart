@@ -3,44 +3,46 @@ import 'package:dokuzu_bul/features/game/presentation/widgets/game_card_widget.d
 import 'package:flutter/material.dart';
 
 class GameBoardWidget extends StatelessWidget {
-  const GameBoardWidget({
-    super.key,
-    required this.cards,
-    this.onCardSelected,
-  });
+  const GameBoardWidget({super.key, required this.cards, this.onCardSelected});
 
   final List<GameCardModel> cards;
   final ValueChanged<GameCardModel>? onCardSelected;
 
   @override
   Widget build(BuildContext context) {
-    final sortedCards = [...cards]
-      ..sort((firstCard, secondCard) {
-        return firstCard.slot.compareTo(secondCard.slot);
-      });
+    const double spacing = 12;
 
     return AspectRatio(
       aspectRatio: 1,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: sortedCards.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemBuilder: (context, index) {
-          final card = sortedCards[index];
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double boardSize = constraints.maxWidth;
+          final double cardSize = (boardSize - (spacing * 2)) / 3;
 
-          return GameCardWidget(
-            key: ValueKey(card.id),
-            number: card.number,
-            isFaceVisible: card.isFaceVisible,
-            onTap: onCardSelected == null
-                ? null
-                : () {
-              onCardSelected!(card);
-            },
+          return Stack(
+            children: cards.map((card) {
+              final double left = card.column * (cardSize + spacing);
+              final double top = card.row * (cardSize + spacing);
+
+              return AnimatedPositioned(
+                key: ValueKey(card.id),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+                left: left,
+                top: top,
+                width: cardSize,
+                height: cardSize,
+                child: GameCardWidget(
+                  number: card.number,
+                  isFaceVisible: card.isFaceVisible,
+                  onTap: onCardSelected == null
+                      ? null
+                      : () {
+                          onCardSelected!(card);
+                        },
+                ),
+              );
+            }).toList(),
           );
         },
       ),
