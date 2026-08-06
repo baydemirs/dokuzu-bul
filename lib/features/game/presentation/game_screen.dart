@@ -1,14 +1,15 @@
-import 'dart:async';
-import 'dart:math';
-
-import 'package:dokuzu_bul/features/game/domain/difficulty.dart';
+import 'package:dokuzu_bul/features/game/constants/game_constants.dart';
 import 'package:dokuzu_bul/features/game/domain/game_card_model.dart';
-import 'package:dokuzu_bul/features/game/domain/game_phase.dart';
 import 'package:dokuzu_bul/features/game/domain/game_state.dart';
+import 'package:dokuzu_bul/features/game/extensions/difficulty_extension.dart';
 import 'package:dokuzu_bul/features/game/presentation/widgets/game_board_widget.dart';
+import 'package:dokuzu_bul/features/game/presentation/widgets/game_bottom_panel_widget.dart';
 import 'package:dokuzu_bul/features/game/presentation/widgets/game_header_widget.dart';
-import 'package:dokuzu_bul/features/game/presentation/widgets/game_timer_widget.dart';
-import 'package:dokuzu_bul/features/game/presentation/widgets/level_widget.dart';
+import 'package:dokuzu_bul/features/game/presentation/widgets/game_status_widget.dart';
+import 'package:dokuzu_bul/features/game/services/game_engine.dart';
+import 'package:dokuzu_bul/features/game/services/game_timer_service.dart';
+import 'package:dokuzu_bul/features/game/services/score_service.dart';
+import 'package:dokuzu_bul/features/game/services/shuffle_service.dart';
 import 'package:flutter/material.dart';
 
 class GameScreen extends StatefulWidget {
@@ -21,18 +22,19 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late GameState gameState;
 
-  final Random _random = Random();
+  final GameEngine _gameEngine = const GameEngine();
+  final ShuffleService _shuffleService = ShuffleService();
+  final ScoreService _scoreService = const ScoreService();
+  final GameTimerService _timerService = GameTimerService();
 
-  Timer? _selectionTimer;
-
-  double _remainingSeconds = 6;
+  double _remainingSeconds = 0;
 
   @override
   void initState() {
     super.initState();
 
     gameState = createInitialGameState();
-    _remainingSeconds = _getSelectionDuration();
+    _remainingSeconds = gameState.difficulty.selectionSeconds;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startGame();
@@ -41,24 +43,19 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
-    _selectionTimer?.cancel();
+    _timerService.dispose();
     super.dispose();
   }
 
   Future<void> _startGame() async {
-    _selectionTimer?.cancel();
+    _timerService.cancel();
 
     setState(() {
-      _remainingSeconds = _getSelectionDuration();
-
-      gameState = gameState.copyWith(
-        phase: GamePhase.preview,
-        cards: _openAllCards(gameState.cards),
-        remainingTime: 1.0,
-      );
+      _remainingSeconds = gameState.difficulty.selectionSeconds;
+      gameState = _gameEngine.startPreview(gameState);
     });
 
-    await Future.delayed(const Duration(milliseconds: 1800));
+    await Future.delayed(GameConstants.previewDuration);
 
     if (!mounted) {
       return;
@@ -69,13 +66,10 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _hideCardsAndShuffle() async {
     setState(() {
-      gameState = gameState.copyWith(
-        phase: GamePhase.hiding,
-        cards: _closeAllCards(gameState.cards),
-      );
+      gameState = _gameEngine.startHiding(gameState);
     });
 
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(GameConstants.cardHideDuration);
 
     if (!mounted) {
       return;
@@ -86,24 +80,18 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _shuffleBoard() async {
     setState(() {
-      gameState = gameState.copyWith(phase: GamePhase.shuffling);
+      gameState = _gameEngine.startShuffling(gameState);
     });
 
-    final int moveCount = _getMoveCount();
+    final int moveCount = gameState.difficulty.moveCount;
 
     for (int move = 0; move < moveCount; move++) {
-      final int firstIndex = _getRandomCardIndex();
+      final swap = _shuffleService.createRandomSwap(gameState.cards.length);
 
-      int secondIndex = _getRandomCardIndex();
-
-      while (secondIndex == firstIndex) {
-        secondIndex = _getRandomCardIndex();
-      }
-
-      final updatedCards = _swapCards(
+      final updatedCards = _shuffleService.swapCards(
         cards: gameState.cards,
-        firstIndex: firstIndex,
-        secondIndex: secondIndex,
+        firstIndex: swap.firstIndex,
+        secondIndex: swap.secondIndex,
       );
 
       if (!mounted) {
@@ -114,7 +102,7 @@ class _GameScreenState extends State<GameScreen> {
         gameState = gameState.copyWith(cards: updatedCards);
       });
 
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(gameState.difficulty.shuffleDuration);
     }
 
     if (!mounted) {
@@ -122,68 +110,54 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     setState(() {
-      gameState = gameState.copyWith(
-        phase: GamePhase.waitingForSelection,
-        remainingTime: 1.0,
-      );
+      gameState = _gameEngine.waitForSelection(gameState);
     });
 
     _startSelectionTimer();
   }
 
   void _startSelectionTimer() {
-    _selectionTimer?.cancel();
+    final double totalSeconds = gameState.difficulty.selectionSeconds;
 
-    final double totalSeconds = _getSelectionDuration();
+    _timerService.start(
+      totalSeconds: totalSeconds,
+      onTick: (remainingSeconds, progress) {
+        if (!mounted || !_gameEngine.canSelectCard(gameState)) {
+          _timerService.cancel();
+          return;
+        }
 
-    setState(() {
-      _remainingSeconds = totalSeconds;
+        setState(() {
+          _remainingSeconds = remainingSeconds;
 
-      gameState = gameState.copyWith(remainingTime: 1.0);
-    });
+          gameState = gameState.copyWith(remainingTime: progress);
+        });
+      },
+      onCompleted: () {
+        if (!mounted || !_gameEngine.canSelectCard(gameState)) {
+          return;
+        }
 
-    _selectionTimer = Timer.periodic(const Duration(milliseconds: 100), (
-      timer,
-    ) {
-      if (!mounted || gameState.phase != GamePhase.waitingForSelection) {
-        timer.cancel();
-        return;
-      }
-
-      final double updatedSeconds = max(0, _remainingSeconds - 0.1).toDouble();
-
-      final double updatedProgress = updatedSeconds / totalSeconds;
-
-      setState(() {
-        _remainingSeconds = updatedSeconds;
-
-        gameState = gameState.copyWith(remainingTime: updatedProgress);
-      });
-
-      if (updatedSeconds <= 0) {
-        timer.cancel();
-        unawaited(_handleTimeExpired());
-      }
-    });
+        _handleTimeExpired();
+      },
+    );
   }
 
   Future<void> _handleCardSelected(GameCardModel selectedCard) async {
-    if (gameState.phase != GamePhase.waitingForSelection) {
+    if (!_gameEngine.canSelectCard(gameState)) {
       return;
     }
 
-    _selectionTimer?.cancel();
-
-    final bool isCorrect = selectedCard.isTarget;
+    _timerService.cancel();
 
     await _showRoundResult(
-      isCorrect: isCorrect,
+      isCorrect: selectedCard.isTarget,
       selectedNumber: selectedCard.number,
     );
   }
 
   Future<void> _handleTimeExpired() async {
-    if (gameState.phase != GamePhase.waitingForSelection) {
+    if (!_gameEngine.canSelectCard(gameState)) {
       return;
     }
 
@@ -195,67 +169,51 @@ class _GameScreenState extends State<GameScreen> {
     int? selectedNumber,
     bool didTimeExpire = false,
   }) async {
-    final int updatedCombo = isCorrect ? gameState.combo + 1 : 0;
-
-    final int earnedScore = isCorrect ? 100 * updatedCombo : 0;
-
-    final int updatedScore = gameState.score + earnedScore;
-
-    final int updatedCorrectAnswers = isCorrect
-        ? gameState.correctAnswers + 1
-        : gameState.correctAnswers;
-
-    final int updatedLives = isCorrect
-        ? gameState.lives
-        : max(0, gameState.lives - 1);
+    final RoundResult result = _scoreService.calculateResult(
+      isCorrect: isCorrect,
+      currentScore: gameState.score,
+      currentCombo: gameState.combo,
+      currentLives: gameState.lives,
+      currentCorrectAnswers: gameState.correctAnswers,
+    );
 
     setState(() {
       _remainingSeconds = 0;
 
-      gameState = gameState.copyWith(
-        phase: GamePhase.feedback,
-        cards: _openAllCards(gameState.cards),
-        score: updatedScore,
-        combo: updatedCombo,
-        correctAnswers: updatedCorrectAnswers,
-        lives: updatedLives,
-        remainingTime: 0,
+      gameState = _gameEngine.showRoundFeedback(
+        state: gameState,
+        score: result.score,
+        combo: result.combo,
+        lives: result.lives,
+        correctAnswers: result.correctAnswers,
       );
     });
 
     if (didTimeExpire) {
-      debugPrint('Süre doldu - Kalan can: $updatedLives');
+      debugPrint('Süre doldu - Kalan can: ${result.lives}');
     } else if (isCorrect) {
       debugPrint(
         'Doğru seçim: $selectedNumber - '
-        'Combo: $updatedCombo - '
-        'Kazanılan puan: $earnedScore - '
-        'Toplam skor: $updatedScore',
+        'Combo: ${result.combo} - '
+        'Kazanılan puan: ${result.earnedScore} - '
+        'Toplam skor: ${result.score}',
       );
     } else {
       debugPrint(
         'Yanlış seçim: $selectedNumber - '
-        'Kalan can: $updatedLives',
+        'Kalan can: ${result.lives}',
       );
     }
 
-    await Future.delayed(const Duration(milliseconds: 1400));
+    await Future.delayed(GameConstants.feedbackDuration);
 
     if (!mounted) {
       return;
     }
 
-    if (gameState.lives <= 0) {
+    if (_gameEngine.shouldFinishGame(gameState)) {
       setState(() {
-        gameState = gameState.copyWith(phase: GamePhase.gameOver);
-      });
-
-      return;
-    }
-
-    if (gameState.currentRound >= 5) {
-      setState(() {
-        gameState = gameState.copyWith(phase: GamePhase.levelCompleted);
+        gameState = _gameEngine.finishGame(gameState);
       });
 
       return;
@@ -266,17 +224,11 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _startNextRound() async {
     setState(() {
-      _remainingSeconds = _getSelectionDuration();
-
-      gameState = gameState.copyWith(
-        currentRound: gameState.currentRound + 1,
-        phase: GamePhase.preview,
-        cards: _openAllCards(gameState.cards),
-        remainingTime: 1.0,
-      );
+      _remainingSeconds = gameState.difficulty.selectionSeconds;
+      gameState = _gameEngine.startNextRound(gameState);
     });
 
-    await Future.delayed(const Duration(milliseconds: 1800));
+    await Future.delayed(GameConstants.previewDuration);
 
     if (!mounted) {
       return;
@@ -286,143 +238,28 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _restartGame() {
-    _selectionTimer?.cancel();
+    _timerService.cancel();
 
     setState(() {
       gameState = createInitialGameState();
-      _remainingSeconds = _getSelectionDuration();
+      _remainingSeconds = gameState.difficulty.selectionSeconds;
     });
 
     _startGame();
   }
 
-  List<GameCardModel> _openAllCards(List<GameCardModel> cards) {
-    return cards.map((card) {
-      return card.open();
-    }).toList();
-  }
-
-  List<GameCardModel> _closeAllCards(List<GameCardModel> cards) {
-    return cards.map((card) {
-      return card.close();
-    }).toList();
-  }
-
-  List<GameCardModel> _swapCards({
-    required List<GameCardModel> cards,
-    required int firstIndex,
-    required int secondIndex,
-  }) {
-    final firstCard = cards[firstIndex];
-    final secondCard = cards[secondIndex];
-
-    return cards.map((card) {
-      if (card.id == firstCard.id) {
-        return card.copyWith(slot: secondCard.slot);
-      }
-
-      if (card.id == secondCard.id) {
-        return card.copyWith(slot: firstCard.slot);
-      }
-
-      return card;
-    }).toList();
-  }
-
-  int _getRandomCardIndex() {
-    return _random.nextInt(gameState.cards.length);
-  }
-
-  int _getMoveCount() {
-    switch (gameState.difficulty) {
-      case Difficulty.easy:
-        return 3;
-
-      case Difficulty.medium:
-        return 6;
-
-      case Difficulty.hard:
-        return 10;
-    }
-  }
-
-  double _getSelectionDuration() {
-    switch (gameState.difficulty) {
-      case Difficulty.easy:
-        return 6;
-
-      case Difficulty.medium:
-        return 4.5;
-
-      case Difficulty.hard:
-        return 3;
-    }
-  }
-
-  String _getDifficultyText() {
-    switch (gameState.difficulty) {
-      case Difficulty.easy:
-        return 'Kolay';
-
-      case Difficulty.medium:
-        return 'Orta';
-
-      case Difficulty.hard:
-        return 'Zor';
-    }
-  }
-
-  String _getInstructionText() {
-    switch (gameState.phase) {
-      case GamePhase.idle:
-        return 'Oyun hazırlanıyor';
-
-      case GamePhase.preview:
-        return 'Dokuzu takip et';
-
-      case GamePhase.hiding:
-        return 'Kartlar kapanıyor';
-
-      case GamePhase.shuffling:
-        return 'Dokuzu takip et';
-
-      case GamePhase.waitingForSelection:
-        return 'Dokuz hangi kartta?';
-
-      case GamePhase.feedback:
-        return 'Sonuç gösteriliyor';
-
-      case GamePhase.levelCompleted:
-        return 'Seviye tamamlandı';
-
-      case GamePhase.gameOver:
-        return 'Oyun bitti';
-    }
-  }
-
-  double _getLevelProgress() {
-    int completedRounds = gameState.currentRound - 1;
-
-    if (gameState.phase == GamePhase.feedback ||
-        gameState.phase == GamePhase.levelCompleted ||
-        gameState.phase == GamePhase.gameOver) {
-      completedRounds = gameState.currentRound;
-    }
-
-    return (completedRounds / 5).clamp(0.0, 1.0);
-  }
-
-  bool get _canSelectCard {
-    return gameState.phase == GamePhase.waitingForSelection;
-  }
-
-  bool get _isGameFinished {
-    return gameState.phase == GamePhase.levelCompleted ||
-        gameState.phase == GamePhase.gameOver;
-  }
-
   @override
   Widget build(BuildContext context) {
+    final bool canSelectCard = _gameEngine.canSelectCard(gameState);
+
+    final bool isGameFinished = _gameEngine.isGameFinished(gameState);
+
+    final double levelProgress = _gameEngine.calculateLevelProgress(gameState);
+
+    final String instructionText = _gameEngine.getInstructionText(
+      gameState.phase,
+    );
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -431,66 +268,34 @@ class _GameScreenState extends State<GameScreen> {
             children: [
               GameHeaderWidget(
                 lives: gameState.lives,
-                level: _getDifficultyText(),
+                level: gameState.difficulty.label,
                 score: gameState.score,
               ),
               const SizedBox(height: 12),
-              LevelWidget(
-                level: 'Tur ${gameState.currentRound} / 5',
-                progress: _getLevelProgress(),
-              ),
-              const SizedBox(height: 12),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: gameState.combo > 1
-                    ? Chip(
-                        key: ValueKey(gameState.combo),
-                        avatar: const Icon(
-                          Icons.local_fire_department,
-                          size: 19,
-                        ),
-                        label: Text(
-                          '${gameState.combo}x Combo',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      )
-                    : const SizedBox(key: ValueKey('empty-combo'), height: 32),
-              ),
-              const SizedBox(height: 16),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: Text(
-                  _getInstructionText(),
-                  key: ValueKey(gameState.phase),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              GameStatusWidget(
+                currentRound: gameState.currentRound,
+                totalRounds: GameConstants.totalRounds,
+                levelProgress: levelProgress,
+                combo: gameState.combo,
+                phase: gameState.phase,
+                instructionText: instructionText,
               ),
               const SizedBox(height: 20),
               Expanded(
                 child: Center(
                   child: GameBoardWidget(
                     cards: gameState.cards,
-                    onCardSelected: _canSelectCard ? _handleCardSelected : null,
+                    onCardSelected: canSelectCard ? _handleCardSelected : null,
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              if (_isGameFinished)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _restartGame,
-                    child: const Text('Tekrar Oyna'),
-                  ),
-                )
-              else
-                GameTimerWidget(
-                  progress: gameState.remainingTime,
-                  remainingSeconds: _remainingSeconds,
-                ),
+              GameBottomPanelWidget(
+                isGameFinished: isGameFinished,
+                timerProgress: gameState.remainingTime,
+                remainingSeconds: _remainingSeconds,
+                onRestart: _restartGame,
+              ),
             ],
           ),
         ),

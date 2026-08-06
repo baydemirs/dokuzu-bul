@@ -1,3 +1,4 @@
+import 'package:dokuzu_bul/features/game/constants/game_constants.dart';
 import 'package:dokuzu_bul/features/game/domain/difficulty.dart';
 import 'package:dokuzu_bul/features/game/domain/game_card_model.dart';
 import 'package:dokuzu_bul/features/game/domain/game_phase.dart';
@@ -51,7 +52,7 @@ class GameState {
 }
 
 GameState createInitialGameState() {
-  final cards = List.generate(9, (index) {
+  final cards = List.generate(GameConstants.totalCards, (index) {
     return GameCardModel(id: index + 1, number: index + 1, slot: index);
   });
 
@@ -61,7 +62,7 @@ GameState createInitialGameState() {
     difficulty: Difficulty.easy,
     score: 0,
     combo: 0,
-    lives: 3,
+    lives: GameConstants.initialLives,
     currentRound: 1,
     correctAnswers: 0,
     remainingTime: 1.0,
