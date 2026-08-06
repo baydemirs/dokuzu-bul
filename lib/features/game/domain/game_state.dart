@@ -8,6 +8,7 @@ class GameState {
     required this.phase,
     required this.difficulty,
     required this.score,
+    required this.combo,
     required this.lives,
     required this.currentRound,
     required this.correctAnswers,
@@ -18,6 +19,7 @@ class GameState {
   final GamePhase phase;
   final Difficulty difficulty;
   final int score;
+  final int combo;
   final int lives;
   final int currentRound;
   final int correctAnswers;
@@ -28,6 +30,7 @@ class GameState {
     GamePhase? phase,
     Difficulty? difficulty,
     int? score,
+    int? combo,
     int? lives,
     int? currentRound,
     int? correctAnswers,
@@ -38,6 +41,7 @@ class GameState {
       phase: phase ?? this.phase,
       difficulty: difficulty ?? this.difficulty,
       score: score ?? this.score,
+      combo: combo ?? this.combo,
       lives: lives ?? this.lives,
       currentRound: currentRound ?? this.currentRound,
       correctAnswers: correctAnswers ?? this.correctAnswers,
@@ -56,6 +60,7 @@ GameState createInitialGameState() {
     phase: GamePhase.idle,
     difficulty: Difficulty.easy,
     score: 0,
+    combo: 0,
     lives: 3,
     currentRound: 1,
     correctAnswers: 0,
