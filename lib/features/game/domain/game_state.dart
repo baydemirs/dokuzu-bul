@@ -51,7 +51,7 @@ class GameState {
   }
 }
 
-GameState createInitialGameState() {
+GameState createInitialGameState({Difficulty difficulty = Difficulty.easy}) {
   final cards = List.generate(GameConstants.totalCards, (index) {
     return GameCardModel(id: index + 1, number: index + 1, slot: index);
   });
@@ -59,7 +59,7 @@ GameState createInitialGameState() {
   return GameState(
     cards: cards,
     phase: GamePhase.idle,
-    difficulty: Difficulty.easy,
+    difficulty: difficulty,
     score: 0,
     combo: 0,
     lives: GameConstants.initialLives,

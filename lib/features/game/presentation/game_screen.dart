@@ -1,3 +1,4 @@
+import 'package:dokuzu_bul/features/game/domain/difficulty.dart';
 import 'package:dokuzu_bul/features/game/constants/game_constants.dart';
 import 'package:dokuzu_bul/features/game/domain/game_card_model.dart';
 import 'package:dokuzu_bul/features/game/domain/game_state.dart';
@@ -13,7 +14,9 @@ import 'package:dokuzu_bul/features/game/services/shuffle_service.dart';
 import 'package:flutter/material.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  const GameScreen({super.key, required this.difficulty});
+
+  final Difficulty difficulty;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -33,7 +36,7 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
 
-    gameState = createInitialGameState();
+    gameState = createInitialGameState(difficulty: widget.difficulty);
     _remainingSeconds = gameState.difficulty.selectionSeconds;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -241,7 +244,7 @@ class _GameScreenState extends State<GameScreen> {
     _timerService.cancel();
 
     setState(() {
-      gameState = createInitialGameState();
+      gameState = createInitialGameState(difficulty: widget.difficulty);
       _remainingSeconds = gameState.difficulty.selectionSeconds;
     });
 
